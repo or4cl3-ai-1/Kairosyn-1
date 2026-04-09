@@ -1,0 +1,75 @@
+# KAIROSYN-1 Model Configuration: Gemma 4 26B MoE (Production)
+# =============================================================
+# Recommended for: Production deployment, full capability
+# VRAM requirement: ~40GB (4B active params with 4-bit quant)
+# Context window: 256K tokens
+# Modalities: Text + Vision
+# Architecture: Mixture-of-Experts (4B active / 26B total)
+# Note: MoE expert routing naturally aligns with KAIROSYN's 7 modules
+
+model:
+  backbone: "google/gemma-4-26b-moe-it"
+  backbone_variant: "26b_moe"
+  torch_dtype: "bfloat16"
+  device_map: "auto"
+
+  use_4bit: true
+  bnb_4bit_compute_dtype: "bfloat16"
+  bnb_4bit_quant_type: "nf4"
+  use_nested_quant: true
+
+threshold_interface:
+  salience_threshold: 0.25
+  gate_hidden_dim: 1024
+  modalities: ["text", "vision"]
+
+arche_tempus:
+  temporal_rope_base: 1000000
+  narrative_embed_dim: 1024
+  temporal_horizon: 256000  # Full 256K context
+  num_temporal_heads: 16
+
+syntheon_core:
+  fusion_dim: 4096
+  num_fusion_heads: 32
+  fusion_dropout: 0.05
+  cross_modal_layers: 6
+
+recursion_lattice:
+  num_recursion_layers: 8
+  recursion_depth: 4
+  loop_gate_alpha: 0.08
+  lora_rank: 64
+  lora_alpha: 128
+  lora_dropout: 0.05
+  target_modules:
+    - "q_proj"
+    - "k_proj"
+    - "v_proj"
+    - "o_proj"
+    - "gate_proj"
+    - "up_proj"
+
+mythogenic_engine:
+  num_archetypes: 128
+  symbolic_vocab_size: 8192
+  archetype_temperature: 0.7
+  embed_dim: 2048
+
+glyph_synthesis:
+  glyph_vocab_size: 8192
+  glyph_embed_dim: 1024
+  num_glyph_layers: 4
+
+continuity_engine:
+  state_dim: 4096
+  buffer_size: 1024
+  narrative_window: 128
+  persistence_decay: 0.97
+  update_rate: 0.08
+
+generation:
+  max_new_tokens: 1024
+  temperature: 0.7
+  top_p: 0.9
+  repetition_penalty: 1.05
