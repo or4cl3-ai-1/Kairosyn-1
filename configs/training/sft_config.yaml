@@ -1,0 +1,49 @@
+# KAIROSYN SFT Training Configuration
+# =====================================
+
+training:
+  num_train_epochs: 3
+  per_device_train_batch_size: 4
+  gradient_accumulation_steps: 8
+  effective_batch_size: 32  # 4 * 8
+
+  # Optimizer
+  learning_rate: 2.0e-4
+  lr_scheduler_type: "cosine"
+  warmup_ratio: 0.05
+  weight_decay: 0.01
+  max_grad_norm: 1.0
+
+  # Precision
+  bf16: true
+  fp16: false
+  gradient_checkpointing: true
+  optim: "paged_adamw_8bit"
+
+  # Sequence packing
+  max_seq_length: 8192
+  packing: true
+
+  # Logging & saving
+  logging_steps: 10
+  eval_steps: 500
+  save_steps: 500
+  save_total_limit: 3
+
+  # Tracking
+  report_to: "wandb"
+  run_name: "kairosyn-sft-v1"
+
+datasets:
+  - name: "go_emotions"
+    weight: 0.25
+    split: "train"
+  - name: "lucasmccabe/logiqa"
+    weight: 0.20
+    split: "train"
+  - name: "squad_v2"
+    weight: 0.20
+    split: "train"
+  - name: "kairosyn_introspective_synthetic"
+    weight: 0.35
+    split: "train"
