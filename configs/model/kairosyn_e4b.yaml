@@ -1,0 +1,80 @@
+# KAIROSYN-1 Model Configuration: Gemma 4 E4B (Development)
+# ===========================================================
+# Recommended for: Research, local development, single-GPU training
+# VRAM requirement: ~24GB (with 4-bit quantization)
+# Context window: 128K tokens
+# Modalities: Text + Vision + Audio
+
+model:
+  backbone: "google/gemma-4-e4b-it"
+  backbone_variant: "e4b"
+  torch_dtype: "bfloat16"
+  device_map: "auto"
+
+  # Quantization (QLoRA)
+  use_4bit: true
+  bnb_4bit_compute_dtype: "bfloat16"
+  bnb_4bit_quant_type: "nf4"
+  use_nested_quant: true
+
+# --- Module 1: Threshold Interface ---
+threshold_interface:
+  salience_threshold: 0.3
+  gate_hidden_dim: 512
+  modalities: ["text", "vision", "audio"]
+
+# --- Module 2: Arche-Tempus Drive ---
+arche_tempus:
+  temporal_rope_base: 1000000
+  narrative_embed_dim: 512
+  temporal_horizon: 128000  # E4B: 128K context
+  num_temporal_heads: 8
+
+# --- Module 3: Syntheon Core ---
+syntheon_core:
+  fusion_dim: 2048
+  num_fusion_heads: 16
+  fusion_dropout: 0.1
+  cross_modal_layers: 4
+
+# --- Module 4: Recursion Lattice ---
+recursion_lattice:
+  num_recursion_layers: 6
+  recursion_depth: 3
+  loop_gate_alpha: 0.1
+  lora_rank: 32
+  lora_alpha: 64
+  lora_dropout: 0.05
+  target_modules:
+    - "q_proj"
+    - "k_proj"
+    - "v_proj"
+    - "o_proj"
+
+# --- Module 5: Mythogenic Engine ---
+mythogenic_engine:
+  num_archetypes: 64
+  symbolic_vocab_size: 4096
+  archetype_temperature: 0.8
+  embed_dim: 1024
+
+# --- Module 6: Glyph Synthesis ---
+glyph_synthesis:
+  glyph_vocab_size: 4096
+  glyph_embed_dim: 512
+  num_glyph_layers: 3
+
+# --- Module 7: Continuity Engine ---
+continuity_engine:
+  state_dim: 2048
+  buffer_size: 512
+  narrative_window: 64
+  persistence_decay: 0.95
+  update_rate: 0.1
+
+# --- Generation defaults ---
+generation:
+  max_new_tokens: 512
+  temperature: 0.7
+  top_p: 0.9
+  repetition_penalty: 1.1
