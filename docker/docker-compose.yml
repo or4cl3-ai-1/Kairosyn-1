@@ -1,0 +1,62 @@
+version: "3.9"
+
+services:
+  # KAIROSYN Inference Server
+  kairosyn:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: kairosyn-server
+    ports:
+      - "8080:8080"
+    volumes:
+      - ../checkpoints:/app/checkpoints
+      - ../results:/app/results
+      - kairosyn-cache:/app/.cache
+    environment:
+      - CUDA_VISIBLE_DEVICES=0
+      - HF_TOKEN=${HF_TOKEN}
+      - WANDB_API_KEY=${WANDB_API_KEY}
+      - MODEL_CHECKPOINT=/app/checkpoints/kairosyn-maml-v1
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+
+  # Prometheus metrics
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: kairosyn-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    restart: unless-stopped
+
+  # Grafana dashboard
+  grafana:
+    image: grafana/grafana:latest
+    container_name: kairosyn-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=kairosyn
+    volumes:
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
+volumes:
+  kairosyn-cache:
+  grafana-data:
