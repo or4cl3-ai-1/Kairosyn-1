@@ -1,0 +1,36 @@
+# KAIROSYN PPO Introspective RL Configuration
+# =============================================
+
+ppo:
+  learning_rate: 1.0e-5
+  batch_size: 8
+  mini_batch_size: 2
+  ppo_epochs: 4
+  kl_penalty: "kl"
+  target_kl: 0.1
+  init_kl_coef: 0.2
+  cliprange: 0.2
+  cliprange_value: 0.2
+  vf_coef: 0.1
+  gamma: 0.99
+  lam: 0.95
+
+  # Generation parameters during rollout
+  max_new_tokens: 256
+  temperature: 0.8
+  do_sample: true
+  top_p: 0.9
+
+  # Training duration
+  total_steps: 1000
+
+  # Tracking
+  log_with: "wandb"
+  tracker_project_name: "kairosyn-ppo"
+
+reward_weights:
+  introspection: 0.35
+  coherence: 0.25
+  emotion: 0.15
+  symbolic: 0.15
+  logical: 0.10
