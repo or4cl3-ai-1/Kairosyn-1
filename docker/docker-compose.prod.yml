@@ -1,0 +1,211 @@
+version: "3.9"
+
+# ==============================================================================
+# KAIROSYN-1 — Production Docker Compose
+# ==============================================================================
+# Usage:
+#   docker compose -f docker/docker-compose.prod.yml up -d
+#
+# Required environment variables (set in .env or shell):
+#   HF_TOKEN       — Hugging Face token for Gemma 4 access
+#   WANDB_API_KEY  — Weights & Biases API key (optional)
+#   GRAFANA_PASS   — Grafana admin password
+# ==============================================================================
+
+x-logging: &default-logging
+  driver: "json-file"
+  options:
+    max-size: "50m"
+    max-file: "5"
+
+services:
+
+  # ── KAIROSYN Inference Server ──────────────────────────────────────────────
+  kairosyn:
+    image: ghcr.io/or4cl3-ai-1/kairosyn-1:latest
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.prod
+      args:
+        GIT_SHA: ${GIT_SHA:-unknown}
+        BUILD_DATE: ${BUILD_DATE:-unknown}
+        VERSION: ${VERSION:-1.0.0}
+    container_name: kairosyn-server
+    restart: unless-stopped
+    ports:
+      - "${PORT:-8080}:8080"
+    volumes:
+      - kairosyn-checkpoints:/app/checkpoints
+      - kairosyn-results:/app/results
+      - kairosyn-cache:/app/.cache
+    environment:
+      - KAIROSYN_CONFIG=/app/configs/model/kairosyn_e4b.yaml
+      - MODEL_CHECKPOINT=${MODEL_CHECKPOINT:-}
+      - HF_TOKEN=${HF_TOKEN}
+      - HF_HOME=/app/.cache/huggingface
+      - TRANSFORMERS_CACHE=/app/.cache/huggingface
+      - TOKENIZERS_PARALLELISM=false
+      - SESSION_TTL=${SESSION_TTL:-7200}
+      - MAX_SESSIONS=${MAX_SESSIONS:-1000}
+      - WANDB_API_KEY=${WANDB_API_KEY:-}
+      - WANDB_MODE=${WANDB_MODE:-disabled}
+    deploy:
+      resources:
+        limits:
+          memory: 32G
+        reservations:
+          memory: 8G
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+    networks:
+      - kairosyn-net
+    logging: *default-logging
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.kairosyn.rule=Host(`kairosyn.or4cl3.ai`)"
+      - "traefik.http.routers.kairosyn.entrypoints=websecure"
+      - "traefik.http.routers.kairosyn.tls.certresolver=letsencrypt"
+      - "traefik.http.services.kairosyn.loadbalancer.server.port=8080"
+
+  # ── Traefik Reverse Proxy + TLS ────────────────────────────────────────────
+  traefik:
+    image: traefik:v3.0
+    container_name: kairosyn-traefik
+    restart: unless-stopped
+    command:
+      - "--api.insecure=false"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.web.http.redirections.entrypoint.to=websecure"
+      - "--entrypoints.web.http.redirections.entrypoint.scheme=https"
+      - "--entrypoints.websecure.address=:443"
+      - "--certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL:-research@or4cl3.ai}"
+      - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
+      - "--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web"
+      - "--log.level=INFO"
+      - "--accesslog=true"
+      - "--metrics.prometheus=true"
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - traefik-letsencrypt:/letsencrypt
+    networks:
+      - kairosyn-net
+    logging: *default-logging
+
+  # ── Redis (session persistence for multi-worker deployments) ──────────────
+  redis:
+    image: redis:7-alpine
+    container_name: kairosyn-redis
+    restart: unless-stopped
+    command: redis-server --maxmemory 512mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis-data:/data
+    networks:
+      - kairosyn-net
+    logging: *default-logging
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # ── Prometheus ─────────────────────────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:v2.51.0
+    container_name: kairosyn-prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=30d"
+      - "--web.enable-lifecycle"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    networks:
+      - kairosyn-net
+    logging: *default-logging
+
+  # ── Grafana ────────────────────────────────────────────────────────────────
+  grafana:
+    image: grafana/grafana:10.4.0
+    container_name: kairosyn-grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASS:-kairosyn_admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SERVER_ROOT_URL=https://grafana.or4cl3.ai
+      - GF_ANALYTICS_REPORTING_ENABLED=false
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./grafana/datasources:/etc/grafana/provisioning/datasources:ro
+    depends_on:
+      - prometheus
+    networks:
+      - kairosyn-net
+    logging: *default-logging
+
+  # ── NVIDIA GPU Metrics Exporter ────────────────────────────────────────────
+  nvidia-exporter:
+    image: nvcr.io/nvidia/k8s/dcgm-exporter:3.3.0-3.2.0-ubuntu22.04
+    container_name: kairosyn-dcgm
+    restart: unless-stopped
+    environment:
+      - DCGM_EXPORTER_NO_HOSTNAME=1
+    cap_add:
+      - SYS_ADMIN
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    ports:
+      - "9400:9400"
+    networks:
+      - kairosyn-net
+    logging: *default-logging
+
+# ── Volumes ───────────────────────────────────────────────────────────────────
+volumes:
+  kairosyn-checkpoints:
+    driver: local
+  kairosyn-results:
+    driver: local
+  kairosyn-cache:
+    driver: local
+  redis-data:
+    driver: local
+  prometheus-data:
+    driver: local
+  grafana-data:
+    driver: local
+  traefik-letsencrypt:
+    driver: local
+
+# ── Networks ──────────────────────────────────────────────────────────────────
+networks:
+  kairosyn-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
