@@ -1,0 +1,27 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kairosyn-config
+  namespace: kairosyn
+  labels:
+    app: kairosyn
+data:
+  # Server settings
+  PORT: "8080"
+  WORKERS: "1"
+  SESSION_TTL: "7200"
+  MAX_SESSIONS: "500"
+  LOG_LEVEL: "info"
+
+  # Model settings
+  KAIROSYN_CONFIG: "/app/configs/model/kairosyn_e4b.yaml"
+  TOKENIZERS_PARALLELISM: "false"
+
+  # Inference defaults
+  DEFAULT_MAX_NEW_TOKENS: "512"
+  DEFAULT_TEMPERATURE: "0.7"
+  DEFAULT_TOP_P: "0.9"
+
+  # Monitoring
+  ENABLE_PROMETHEUS: "true"
+  PROMETHEUS_PORT: "8080"
