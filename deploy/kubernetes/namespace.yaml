@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: kairosyn
+  labels:
+    app.kubernetes.io/name: kairosyn
+    app.kubernetes.io/part-of: kairosyn-1
+    managed-by: or4cl3-ai
