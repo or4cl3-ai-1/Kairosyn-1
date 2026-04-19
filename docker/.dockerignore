@@ -1,0 +1,72 @@
+# KAIROSYN-1 .dockerignore
+# Prevents unnecessary files from entering Docker build context
+
+# Git
+.git/
+.gitignore
+
+# Python artifacts
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Jupyter
+notebooks/
+*.ipynb
+
+# Docs
+docs/
+*.md
+*.tex
+*.rst
+
+# Tests
+tests/
+htmlcov/
+.coverage
+coverage.xml
+.pytest_cache/
+.mypy_cache/
+
+# Large model files (mounted as volumes at runtime)
+checkpoints/
+*.pt
+*.pth
+*.bin
+*.safetensors
+*.gguf
+
+# Cache
+.cache/
+*.cache
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Experiment tracking
+wandb/
+runs/
+results/
+
+# Secrets / env
+.env
+.env.*
+secrets/
+*.key
+*.pem
